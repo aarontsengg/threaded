@@ -1,5 +1,5 @@
 {
-  "name": "virtual-try-on",
+  "name": "threaded",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -70,7 +70,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.9",
     "@types/node": "^22.19.0",
-    "@types/react": "^19",
+    "@types/react": "^19.2.7",
     "@types/react-dom": "^19",
     "postcss": "^8.5",
     "tailwindcss": "^4.1.9",

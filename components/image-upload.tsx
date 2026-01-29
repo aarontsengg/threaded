@@ -9,25 +9,64 @@ import { Button } from "@/components/ui/button"
 interface ImageUploadProps {
   image: string | null
   onImageChange: (image: string | null) => void
+  onFileChange?: (file: File | null) => void
   label: string
 }
 
-export default function ImageUpload({ image, onImageChange, label }: ImageUploadProps) {
+// Convert any image to JPEG format (fixes AVIF/WebP compatibility issues with fal.ai)
+async function convertToJpeg(file: File): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.width
+      canvas.height = img.height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        reject(new Error('Could not get canvas context'))
+        return
+      }
+      ctx.drawImage(img, 0, 0)
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error('Could not convert image'))
+            return
+          }
+          const jpegFile = new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), {
+            type: 'image/jpeg'
+          })
+          resolve(jpegFile)
+        },
+        'image/jpeg',
+        0.92
+      )
+    }
+    img.onerror = () => reject(new Error('Could not load image'))
+    img.src = URL.createObjectURL(file)
+  })
+}
+
+export default function ImageUpload({ image, onImageChange, onFileChange, label }: ImageUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
+      // Convert to JPEG for fal.ai compatibility
+      const jpegFile = await convertToJpeg(file)
+      onFileChange?.(jpegFile)
       const reader = new FileReader()
       reader.onloadend = () => {
         onImageChange(reader.result as string)
       }
-      reader.readAsDataURL(file)
+      reader.readAsDataURL(jpegFile)
     }
   }
 
   const handleRemove = () => {
     onImageChange(null)
+    onFileChange?.(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }

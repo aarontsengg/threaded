@@ -7,11 +7,12 @@ import { Card } from "@/components/ui/card"
 interface TryOnResultsProps {
   originalImage: string
   resultImage: string
+  generatedGarment?: string | null
   onReset: () => void
   onTryAnother: () => void
 }
 
-export default function TryOnResults({ originalImage, resultImage, onReset, onTryAnother }: TryOnResultsProps) {
+export default function TryOnResults({ originalImage, resultImage, generatedGarment, onReset, onTryAnother }: TryOnResultsProps) {
   const handleDownload = () => {
     const link = document.createElement("a")
     link.href = resultImage
@@ -33,7 +34,7 @@ export default function TryOnResults({ originalImage, resultImage, onReset, onTr
         </div>
 
         {/* Results Grid */}
-        <div className="grid md:grid-cols-2 gap-8 mb-8">
+        <div className={`grid gap-8 mb-8 ${generatedGarment ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
           {/* Original */}
           <Card className="p-6 bg-card border-border">
             <h3 className="text-lg font-semibold mb-4">Original Photo</h3>
@@ -41,6 +42,19 @@ export default function TryOnResults({ originalImage, resultImage, onReset, onTr
               <img src={originalImage || "/placeholder.svg"} alt="Original" className="w-full h-full object-cover" />
             </div>
           </Card>
+
+          {/* Generated Garment (if AI-generated from description) */}
+          {generatedGarment && (
+            <Card className="p-6 bg-card border-border">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-accent" />
+                AI-Generated Garment
+              </h3>
+              <div className="aspect-[3/4] rounded-lg overflow-hidden bg-secondary">
+                <img src={generatedGarment} alt="Generated garment" className="w-full h-full object-cover" />
+              </div>
+            </Card>
+          )}
 
           {/* Result */}
           <Card className="p-6 bg-card border-border">
@@ -69,12 +83,11 @@ export default function TryOnResults({ originalImage, resultImage, onReset, onTr
           </Button>
         </div>
 
-        {/* Note about AI Integration */}
+        {/* Note */}
         <Card className="mt-8 p-6 bg-accent/5 border-accent/20">
           <div className="text-center">
             <p className="text-sm text-muted-foreground">
-              <strong>Note:</strong> To enable actual AI-powered virtual try-on, connect the fal.ai integration from the
-              sidebar. This will unlock realistic clothing visualization using advanced AI models.
+              Powered by fal.ai virtual try-on technology. Results may vary based on image quality and lighting.
             </p>
           </div>
         </Card>
