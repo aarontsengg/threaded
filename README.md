@@ -86,7 +86,7 @@ Open [http://localhost:3000](http://localhost:3000).
 ### Try-On Flow
 
 1. User uploads a photo of themselves
-2. User provides a garment — either as an uploaded image, a URL, or a text description
+2. User provides a garment — either as an uploaded image, a URL, text description, or Phia URL
 3. If text description: Flux Schnell generates a garment image (~$0.03)
 4. The Locus AI agent checks the user's remaining budget and global policy limits
 5. If approved: agent sends USDC payment, then fal.ai's Leffa model runs the try-on (~$0.05)
