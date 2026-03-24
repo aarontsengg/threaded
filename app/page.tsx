@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Sparkles, ArrowRight, ImageIcon, DollarSign, AlertCircle, Upload, X } from "lucide-react"
+import { Sparkles, ArrowRight, ImageIcon, DollarSign, AlertCircle, Upload, X, Link, ThumbsUp, ThumbsDown, Minus, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -15,6 +15,22 @@ interface UserBudget {
   spent: number
   remaining: number
   limit: number
+}
+
+interface ProductMeta {
+  title: string | null
+  brand: string | null
+  price: number | null
+  garmentImageUrl: string | null
+}
+
+interface ProductInsights {
+  verdict: 'Worth it' | 'Think twice' | 'Depends'
+  summary: string
+  pros: string[]
+  cons: string[]
+  fitNote: string
+  sources: Array<{ title: string; url: string }>
 }
 
 type GarmentType = 'upper_body' | 'lower_body' | 'dresses'
@@ -57,8 +73,8 @@ export default function VirtualTryOnPage() {
   const [personImage, setPersonImage] = useState<string | null>(null)
   const [personFile, setPersonFile] = useState<File | null>(null)
 
-  // Garment inputs - three modes
-  const [garmentMode, setGarmentMode] = useState<'upload' | 'url' | 'describe'>('upload')
+  // Garment inputs - four modes
+  const [garmentMode, setGarmentMode] = useState<'upload' | 'url' | 'describe' | 'phia'>('upload')
   const [garmentFile, setGarmentFile] = useState<File | null>(null)
   const [garmentPreview, setGarmentPreview] = useState<string | null>(null)
   const [clothingUrl, setClothingUrl] = useState("")
@@ -72,6 +88,16 @@ export default function VirtualTryOnPage() {
   const [userBudget, setUserBudget] = useState<UserBudget | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [sessionId] = useState(() => `session-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`)
+
+  // Phia link mode
+  const [phiaUrl, setPhiaUrl] = useState("")
+  const [productMeta, setProductMeta] = useState<ProductMeta | null>(null)
+  const [isLookingUp, setIsLookingUp] = useState(false)
+  const [lookupError, setLookupError] = useState<string | null>(null)
+
+  // Enriched insights (populated after try-on if productMeta available)
+  const [insights, setInsights] = useState<ProductInsights | null>(null)
+  const [isLoadingInsights, setIsLoadingInsights] = useState(false)
 
   const handleGarmentFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -92,6 +118,59 @@ export default function VirtualTryOnPage() {
     setGarmentPreview(null)
   }
 
+  const handlePhiaLookup = async () => {
+    if (!phiaUrl) return
+    setIsLookingUp(true)
+    setLookupError(null)
+    setProductMeta(null)
+    try {
+      const res = await fetch('/api/phia-lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: phiaUrl })
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setLookupError(data.error || 'Lookup failed')
+        return
+      }
+      if (!data.garmentImageUrl) {
+        setLookupError("Could not extract garment image from this URL. Try the URL tab instead.")
+        return
+      }
+      setProductMeta(data)
+    } catch {
+      setLookupError('Network error during lookup')
+    } finally {
+      setIsLookingUp(false)
+    }
+  }
+
+  const handleEnrich = async (meta: ProductMeta, type: GarmentType) => {
+    if (!meta.title && !meta.brand) return
+    setIsLoadingInsights(true)
+    try {
+      const res = await fetch('/api/enrich', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productName: meta.title,
+          brand: meta.brand,
+          price: meta.price,
+          garmentType: type
+        })
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setInsights(data)
+      }
+    } catch {
+      // Insights are bonus — fail silently
+    } finally {
+      setIsLoadingInsights(false)
+    }
+  }
+
   const canSubmit = () => {
     if (!personImage && !personFile) return false
 
@@ -102,6 +181,8 @@ export default function VirtualTryOnPage() {
         return !!clothingUrl
       case 'describe':
         return !!clothingDescription
+      case 'phia':
+        return !!productMeta?.garmentImageUrl
       default:
         return false
     }
@@ -136,6 +217,8 @@ export default function VirtualTryOnPage() {
           formData.append('garmentImageUrl', clothingUrl)
         } else if (garmentMode === 'describe' && clothingDescription) {
           formData.append('garmentDescription', clothingDescription)
+        } else if (garmentMode === 'phia' && productMeta?.garmentImageUrl) {
+          formData.append('garmentImageUrl', productMeta.garmentImageUrl)
         }
 
         formData.append('garmentType', garmentType)
@@ -157,7 +240,7 @@ export default function VirtualTryOnPage() {
           },
           body: JSON.stringify({
             humanImageUrl: personImage,
-            garmentImageUrl: garmentMode === 'url' ? clothingUrl : undefined,
+            garmentImageUrl: garmentMode === 'url' ? clothingUrl : garmentMode === 'phia' ? (productMeta?.garmentImageUrl ?? undefined) : undefined,
             garmentDescription: garmentMode === 'describe' ? clothingDescription : undefined,
             garmentType
           })
@@ -188,6 +271,11 @@ export default function VirtualTryOnPage() {
         setGeneratedGarment(data.generatedGarment)
       }
 
+      // Kick off enrichment if we have product metadata
+      if (productMeta?.title || productMeta?.brand) {
+        handleEnrich(productMeta, garmentType)
+      }
+
     } catch (error) {
       console.error("Try-on failed:", error)
       setError(error instanceof Error ? error.message : 'Network error occurred')
@@ -204,6 +292,10 @@ export default function VirtualTryOnPage() {
     setGarmentFile(null)
     setGarmentPreview(null)
     setGeneratedGarment(null)
+    setPhiaUrl("")
+    setProductMeta(null)
+    setLookupError(null)
+    setInsights(null)
   }
 
   if (resultImage) {
@@ -212,6 +304,8 @@ export default function VirtualTryOnPage() {
         originalImage={personImage!}
         resultImage={resultImage}
         generatedGarment={generatedGarment}
+        insights={insights}
+        isLoadingInsights={isLoadingInsights}
         onReset={handleReset}
         onTryAnother={handleReset}
       />
@@ -261,7 +355,7 @@ export default function VirtualTryOnPage() {
                 Clothing Item
               </Label>
               <p className="text-sm text-muted-foreground mt-1">
-                Upload an image, paste a URL, or describe what you want
+                Upload an image, paste a URL, describe it, or link from Phia
               </p>
             </div>
 
@@ -282,11 +376,15 @@ export default function VirtualTryOnPage() {
               </div>
 
               {/* Input Mode Tabs */}
-              <Tabs value={garmentMode} onValueChange={(v) => setGarmentMode(v as 'upload' | 'url' | 'describe')}>
-                <TabsList className="grid w-full grid-cols-3">
+              <Tabs value={garmentMode} onValueChange={(v) => setGarmentMode(v as 'upload' | 'url' | 'describe' | 'phia')}>
+                <TabsList className="grid w-full grid-cols-4">
                   <TabsTrigger value="upload">Upload</TabsTrigger>
                   <TabsTrigger value="url">URL</TabsTrigger>
                   <TabsTrigger value="describe">Describe</TabsTrigger>
+                  <TabsTrigger value="phia" className="flex items-center gap-1">
+                    <Link className="w-3 h-3" />
+                    Phia
+                  </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="upload" className="mt-4">
@@ -330,6 +428,51 @@ export default function VirtualTryOnPage() {
                   />
                   <p className="text-xs text-muted-foreground mt-2">
                     AI will generate a garment image from your description (+$0.03)
+                  </p>
+                </TabsContent>
+
+                <TabsContent value="phia" className="mt-4 space-y-3">
+                  <div className="flex gap-2">
+                    <Input
+                      type="url"
+                      placeholder="Paste a Phia product URL..."
+                      value={phiaUrl}
+                      onChange={(e) => { setPhiaUrl(e.target.value); setProductMeta(null); setLookupError(null) }}
+                    />
+                    <button
+                      onClick={handlePhiaLookup}
+                      disabled={!phiaUrl || isLookingUp}
+                      className="px-3 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 shrink-0"
+                    >
+                      {isLookingUp ? '...' : 'Look up'}
+                    </button>
+                  </div>
+
+                  {lookupError && (
+                    <p className="text-xs text-destructive">{lookupError}</p>
+                  )}
+
+                  {productMeta?.garmentImageUrl && (
+                    <div className="flex items-start gap-3 p-3 rounded-lg bg-secondary/50">
+                      <img
+                        src={productMeta.garmentImageUrl}
+                        alt={productMeta.title ?? 'Product'}
+                        className="w-16 h-16 object-cover rounded-md shrink-0"
+                      />
+                      <div className="min-w-0">
+                        {productMeta.title && (
+                          <p className="text-sm font-medium truncate">{productMeta.title}</p>
+                        )}
+                        {productMeta.price && (
+                          <p className="text-sm text-primary font-semibold">${productMeta.price.toFixed(2)}</p>
+                        )}
+                        <p className="text-xs text-green-500 mt-0.5">Ready to try on</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <p className="text-xs text-muted-foreground">
+                    Link any Phia product to try it on and get enriched community insights
                   </p>
                 </TabsContent>
               </Tabs>
