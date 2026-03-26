@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fal } from '@fal-ai/client';
+import { auth } from '@clerk/nextjs/server';
 import { budgetTracker } from '@/lib/budget-tracker';
 
 fal.config({
@@ -76,8 +77,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get user ID
-    const userId = req.headers.get('x-session-id') ||
+    // Get user ID from Clerk, fall back to session header / IP
+    const { userId: clerkUserId } = await auth();
+    const userId = clerkUserId ||
+                   req.headers.get('x-session-id') ||
                    req.headers.get('x-forwarded-for')?.split(',')[0] ||
                    req.headers.get('x-real-ip') ||
                    'anonymous';
@@ -90,7 +93,7 @@ export async function POST(req: NextRequest) {
       : ESTIMATED_COST_TRYON;
 
     // Check user budget
-    const budgetCheck = budgetTracker.checkBudget(userId, totalCost);
+    const budgetCheck = await budgetTracker.checkBudget(userId, totalCost);
     console.log('User budget check:', budgetCheck);
 
     if (!budgetCheck.hasEnough) {
@@ -166,8 +169,8 @@ export async function POST(req: NextRequest) {
     console.log('Virtual try-on completed successfully!');
 
     // Record spending
-    budgetTracker.recordSpending(userId, totalCost);
-    const updatedBudget = budgetTracker.checkBudget(userId, 0);
+    await budgetTracker.recordSpending(userId, totalCost);
+    const updatedBudget = await budgetTracker.checkBudget(userId, 0);
 
     return NextResponse.json({
       success: true,

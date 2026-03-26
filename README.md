@@ -64,8 +64,8 @@ Create a `.env.local` file:
 FAL_KEY=your_fal_api_key
 
 # Locus (autonomous payments)
-LOCUS_CLIENT_ID=your_locus_client_id
-LOCUS_CLIENT_SECRET=your_locus_client_secret
+# LOCUS_CLIENT_ID=your_locus_client_id
+# LOCUS_CLIENT_SECRET=your_locus_client_secret
 
 # Anthropic (AI agent decision-making)
 ANTHROPIC_API_KEY=your_anthropic_api_key
